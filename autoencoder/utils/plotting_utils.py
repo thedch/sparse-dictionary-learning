@@ -3,11 +3,13 @@ Three different histogram functions. The difference lies in whether to save the 
 color scheme and axes labels.
 These can perhaps be combined into one function, but leaving it as it is for now.
 """
+
 import matplotlib.pyplot as plt
 from PIL import Image
 from io import BytesIO
 import torch
 import os
+
 
 def make_density_histogram(data, bins='auto'):
     """Makes a histogram image from the provided data and returns it.
@@ -25,6 +27,7 @@ def make_density_histogram(data, bins='auto'):
     plt.close(fig)  # close the figure to free memory
     return image
 
+
 def make_activations_histogram(activations, density, feature_id, dirpath=None):
     """makes a histogram of activations and saves it on the disk
     we later include the histogram in the feature browser"""
@@ -40,12 +43,13 @@ def make_activations_histogram(activations, density, feature_id, dirpath=None):
     plt.savefig(image_path)
     plt.close()
 
+
 def make_logits_histogram(logits, feature_id, dirpath=None):
     """
     Makes a histogram of logits for a given feature and saves it as a PNG file
-    Input: 
+    Input:
         logits: a torch tensor of shape (vocab_size,)
-        feature_id: int 
+        feature_id: int
         dirpath: histogram is saved as dirpath/logits_histograms/feature_id.png
     """
     plt.hist(logits.cpu().numpy(), bins='auto')  # You can adjust the number of bins as needed

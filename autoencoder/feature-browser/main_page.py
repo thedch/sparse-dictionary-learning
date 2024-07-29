@@ -1,5 +1,6 @@
 import os
 
+
 def write_main_page(n_features):
 
     main = f"""
@@ -124,6 +125,7 @@ def write_main_page(n_features):
     """
     return main
 
+
 def write_tooltip_css_file():
     tooltip_css = f"""/* Style for the tooltip */
         .tooltip {{
@@ -183,8 +185,9 @@ def write_tooltip_css_file():
             border-radius: 0px;
         }}
         """
-        
+
     return tooltip_css
+
 
 def create_main_html_page(n_features, dirpath=None):
     # create a directory to store feature information
@@ -193,7 +196,7 @@ def create_main_html_page(n_features, dirpath=None):
     os.makedirs(os.path.join(dirpath, 'histograms'), exist_ok=True)
     # write a helper css file tooltip.css in autoencoder_subdir
     with open(os.path.join(dirpath, f'tooltip.css'), 'w') as file:
-        file.write(write_tooltip_css_file()) 
+        file.write(write_tooltip_css_file())
     # write the main page for html
     with open(os.path.join(dirpath, 'main.html'), 'w') as file:
         file.write(write_main_page(n_features))

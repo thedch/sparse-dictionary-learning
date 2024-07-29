@@ -13,6 +13,7 @@ class HookedGPT(GPT):
             self.mlp_activation_hooks.append(output.clone().detach())
         elif mode == 'replace':
             if replacement_tensor is None:
+                raise DeprecationWarning("replacement_tensor is None")
                 replacement_tensor = torch.zeros_like(output)
             return replacement_tensor
 
@@ -31,7 +32,7 @@ class HookedGPT(GPT):
 
         # Register the hook on the MLP GELU activation of the last transformer block
         self.hook_handle = self.transformer.h[-1].mlp.gelu.register_forward_hook(
-            lambda module, input, output: 
+            lambda module, input, output:
             self.hook_fn(module, input, output, mode=mode, replacement_tensor=replacement_tensor)
         )
 

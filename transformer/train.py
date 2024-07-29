@@ -85,6 +85,7 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
+    raise DeprecationWarning('DDP is deprecated, please use CPU')
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
@@ -199,17 +200,20 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
+    raise DeprecationWarning('init from is deprecated')
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
 
 # compile the model
 if compile:
+    raise DeprecationWarning('compile is deprecated')
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
 
 # wrap model into DDP container
 if ddp:
+    raise DeprecationWarning('DDP is deprecated, please use CPU')
     model = DDP(model, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
@@ -244,6 +248,7 @@ def get_lr(it):
 
 # logging
 if wandb_log and master_process:
+    raise DeprecationWarning('wandb is deprecated')
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
@@ -254,6 +259,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 while True:
+    print('!!!')
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -265,6 +271,7 @@ while True:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
+            raise DeprecationWarning('wandb is deprecated')
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
@@ -292,6 +299,7 @@ while True:
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
+            raise DeprecationWarning('DDP is deprecated, please use CPU')
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
             # I really dislike that this bloats the code and forces us to repeat code
@@ -334,4 +342,5 @@ while True:
         break
 
 if ddp:
+    raise DeprecationWarning('DDP is deprecated, please use CPU')
     destroy_process_group()

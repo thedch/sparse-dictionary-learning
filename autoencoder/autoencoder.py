@@ -1,10 +1,11 @@
 """
-This file defines an AutoEncoder class, which also contains an implementation of neuron resampling.   
+This file defines an AutoEncoder class, which also contains an implementation of neuron resampling.
 """
 
-import torch 
-import torch.nn as nn 
-import torch.nn.functional as F 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 class AutoEncoder(nn.Module):
     def __init__(self, n_inputs: int, n_latents: int, lam: float = 0.003, resampling_interval: int = 25000):
@@ -15,7 +16,8 @@ class AutoEncoder(nn.Module):
         resampling_interval: Number of training steps after which dead neurons will be resampled
         """
         super().__init__()
-        self.n_inputs, self.n_latents = n_inputs, n_latents
+        self.n_inputs = n_inputs
+        self.n_latents = n_latents
         self.encoder = nn.Linear(n_inputs, n_latents)
         self.relu = nn.ReLU()
         self.decoder = nn.Linear(n_latents, n_inputs)
@@ -37,7 +39,7 @@ class AutoEncoder(nn.Module):
                 'latents': latents,
                 'reconst_acts': reconstructed,
                 'mse_loss': self.mse_loss(reconstructed, x),
-                'l1_loss': self.l1_loss(latents)
+                'l1_loss': self.l1_loss(latents),
             }
 
     def encode(self, x):
@@ -66,16 +68,16 @@ class AutoEncoder(nn.Module):
         :param inputs: Input tensor of shape (..., n) where n = d_MLP. It includes batch dimensions.
         :param start_idx: Starting index (inclusive) of the feature subset.
         :param end_idx: Ending index (exclusive) of the feature subset.
-        
-        Returns the activations for the specified feature range, reducing computation by 
+
+        Returns the activations for the specified feature range, reducing computation by
         only processing the necessary part of the network's weights and biases.
         """
         adjusted_inputs = inputs - self.decoder.bias  # Adjust input to account for decoder bias
         weight_subset = self.encoder.weight[start_idx:end_idx, :].t()  # Transpose the subset of weights
         bias_subset = self.encoder.bias[start_idx:end_idx]
-        
+
         activations = self.relu(adjusted_inputs @ weight_subset + bias_subset)
-        
+
         return activations
 
     @torch.no_grad()
@@ -90,17 +92,22 @@ class AutoEncoder(nn.Module):
         """
         Remove the component of the gradient parallel to the decoder's weight vectors.
         """
-        unit_weights = F.normalize(self.decoder.weight, dim=0) # \hat{b}
-        proj = (self.decoder.weight.grad * unit_weights).sum(dim=0) * unit_weights 
+        unit_weights = F.normalize(self.decoder.weight, dim=0)  # \hat{b}
+        proj = (self.decoder.weight.grad * unit_weights).sum(dim=0) * unit_weights
         self.decoder.weight.grad = self.decoder.weight.grad - proj
 
-    @staticmethod    
+    @staticmethod
     def is_dead_neuron_investigation_step(step, resampling_interval, num_resamples):
         """
         Determine if the current step is the start of a phase for investigating dead neurons.
         According to Anthropic's specified policy, it occurs at odd multiples of half the resampling interval.
         """
-        return (step > 0) and step % (resampling_interval // 2) == 0 and (step // (resampling_interval // 2)) % 2 != 0 and step < resampling_interval * num_resamples
+        return (
+            (step > 0)
+            and step % (resampling_interval // 2) == 0
+            and (step // (resampling_interval // 2)) % 2 != 0
+            and step < resampling_interval * num_resamples
+        )
 
     @staticmethod
     def is_within_neuron_investigation_phase(step, resampling_interval, num_resamples):
@@ -108,8 +115,10 @@ class AutoEncoder(nn.Module):
         Check if the current step is within a phase where active neurons are investigated.
         This phase occurs in intervals defined in the specified range, starting at odd multiples of half the resampling interval.
         """
-        return any(milestone - resampling_interval // 2 <= step < milestone 
-                   for milestone in range(resampling_interval, resampling_interval * (num_resamples + 1), resampling_interval))
+        return any(
+            milestone - resampling_interval // 2 <= step < milestone
+            for milestone in range(resampling_interval, resampling_interval * (num_resamples + 1), resampling_interval)
+        )
 
     @torch.no_grad()
     def initiate_dead_neurons(self):
@@ -138,7 +147,7 @@ class AutoEncoder(nn.Module):
         average_enc_norm = self._compute_average_norm_of_alive_neurons(alive_neurons)
         probs = self._compute_loss_probabilities(data, batch_size, device)
         selected_examples = self._select_examples_based_on_probabilities(data, probs)
-        
+
         self._resample_neurons(selected_examples, dead_neurons_t, average_enc_norm, device)
         self._update_optimizer_parameters(optimizer, dead_neurons_t)
 

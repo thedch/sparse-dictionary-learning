@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(base_dir, 'transformer'))
 from model import GPTConfig
 from hooked_model import HookedGPT
 
+
 class ResourceLoader:
     """
     Manages resources for training, evaluation, and preparation.
@@ -24,7 +25,7 @@ class ResourceLoader:
         self.gpt_ckpt_dir = gpt_ckpt_dir  # Directory containing GPT model weights
         self.device = device  # Device on which the models will be loaded
         self.mode = mode
-        
+
         # Set the path to the repository as the base directory
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         self.base_dir = os.path.dirname(current_file_dir)
@@ -38,13 +39,13 @@ class ResourceLoader:
             self.autoencoder_data_dir = os.path.join(self.base_dir, 'autoencoder', 'data', self.dataset, str(self.n_ffwd))
             self.autoencoder_data = self.load_next_autoencoder_partition(partition_id=0)
             self.autoencoder_data_info = self.init_autoencoder_data_info()
-            
+
         if mode == "eval":
             assert sae_ckpt_dir, "A path to autoencoder checkpoint must be given"
             self.sae_ckpt_dir = sae_ckpt_dir
             self.autoencoder = self.load_autoencoder_model()
-            self.autoencoder.eval() # note that if we load an autoencoder to resume training, we must not do this
-        
+            self.autoencoder.eval()  # note that if we load an autoencoder to resume training, we must not do this
+
     def load_text_data(self):
         """Loads the text data from the specified dataset."""
         text_data_path = os.path.join(self.base_dir, 'transformer', 'data', self.dataset, 'train.bin')
@@ -63,16 +64,16 @@ class ResourceLoader:
         state_dict = checkpoint['model']
 
         # Remove unwanted prefix from state_dict keys
-        unwanted_prefix = '_orig_mod.' 
+        unwanted_prefix = '_orig_mod.'
         for key in list(state_dict.keys()):
             if key.startswith(unwanted_prefix):
-                state_dict[key[len(unwanted_prefix):]] = state_dict.pop(key)
+                state_dict[key[len(unwanted_prefix) :]] = state_dict.pop(key)
 
         transformer.load_state_dict(state_dict)
         transformer.eval()
         transformer.to(self.device)
         return transformer
-    
+
     def get_number_of_autoencoder_data_files(self):
         """Returns the number of files in the autoencoder data directory."""
         try:
@@ -80,7 +81,7 @@ class ResourceLoader:
         except StopIteration:
             raise ValueError("Autoencoder data directory is empty")
         return num_partitions
-    
+
     def init_autoencoder_data_info(self):
         """Initializes and returns information about the autoencoder data."""
         num_partitions = self.get_number_of_autoencoder_data_files()
@@ -89,7 +90,7 @@ class ResourceLoader:
             'current_partition_id': 0,
             'offset': 0,
             'examples_per_partition': self.autoencoder_data.shape[0],
-            'total_examples': num_partitions * self.autoencoder_data.shape[0]
+            'total_examples': num_partitions * self.autoencoder_data.shape[0],
         }
 
     def load_autoencoder_model(self):
@@ -97,9 +98,10 @@ class ResourceLoader:
         autoencoder_path = os.path.join(self.base_dir, "autoencoder", "out", self.dataset, self.sae_ckpt_dir)
         autoencoder_ckpt = torch.load(os.path.join(autoencoder_path, 'ckpt.pt'), map_location=self.device)
         state_dict = autoencoder_ckpt['autoencoder']
-        n_features, n_ffwd = state_dict['encoder.weight'].shape # H, F
+        n_features, n_ffwd = state_dict['encoder.weight'].shape  # H, F
         l1_coeff = autoencoder_ckpt['config']['l1_coeff']
         from autoencoder import AutoEncoder
+
         autoencoder = AutoEncoder(n_ffwd, n_features, lam=l1_coeff).to(self.device)
         autoencoder.load_state_dict(state_dict)
         return autoencoder
@@ -108,10 +110,10 @@ class ResourceLoader:
         """Generates and returns a batch of text data for training or evaluation."""
         block_size = self.transformer.config.block_size
         ix = torch.randint(len(self.text_data) - block_size, (num_contexts,))
-        X = torch.stack([torch.from_numpy(self.text_data[i:i+block_size].astype(np.int64)) for i in ix])
-        Y = torch.stack([torch.from_numpy(self.text_data[i+1:i+1+block_size].astype(np.int64)) for i in ix])
+        X = torch.stack([torch.from_numpy(self.text_data[i : i + block_size].astype(np.int64)) for i in ix])
+        Y = torch.stack([torch.from_numpy(self.text_data[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix])
         return X.to(device=self.device), Y.to(device=self.device)
-    
+
     def get_autoencoder_data_batch(self, step, batch_size=8192):
         """
         Retrieves a batch of autoencoder data based on the step and batch size.
@@ -128,7 +130,7 @@ class ResourceLoader:
                 batch = self.autoencoder_data[batch_start:]
                 info["current_partition_id"] += 1
                 self.load_next_autoencoder_partition(info["current_partition_id"])
-                batch = torch.cat([batch, self.autoencoder_data[:batch_size - remaining]])
+                batch = torch.cat([batch, self.autoencoder_data[: batch_size - remaining]])
                 info["offset"] = batch_size - remaining
             else:
                 raise IndexError("Autoencoder data batch request exceeds available partitions.")
@@ -153,12 +155,12 @@ class ResourceLoader:
         info = self.autoencoder_data_info
         num_samples_per_partition = size // info["num_partitions"]
         resampling_data = torch.zeros(size, self.n_ffwd)
-        
+
         for partition_id in range(info["num_partitions"]):
             partition_data = torch.load(os.path.join(self.autoencoder_data_dir, f'{partition_id}.pt'))
             sample_indices = torch.randint(info["examples_per_partition"], (num_samples_per_partition,))
             start_index = partition_id * num_samples_per_partition
-            resampling_data[start_index:start_index + num_samples_per_partition] = partition_data[sample_indices]
+            resampling_data[start_index : start_index + num_samples_per_partition] = partition_data[sample_indices]
 
         return resampling_data
 
