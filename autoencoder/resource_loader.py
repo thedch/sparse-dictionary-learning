@@ -58,7 +58,7 @@ class ResourceLoader:
     def load_transformer_model(self):
         """Loads the GPT model with pre-trained weights."""
         ckpt_path = os.path.join(self.base_dir, 'transformer', self.gpt_ckpt_dir, 'ckpt.pt')
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
         gpt_conf = GPTConfig(**checkpoint['model_args'])
         transformer = HookedGPT(gpt_conf)
         state_dict = checkpoint['model']
@@ -100,7 +100,7 @@ class ResourceLoader:
         state_dict = autoencoder_ckpt['autoencoder']
         n_features, n_ffwd = state_dict['encoder.weight'].shape  # H, F
         l1_coeff = autoencoder_ckpt['config']['l1_coeff']
-        from autoencoder import AutoEncoder
+        from autoencoder_architecture import AutoEncoder
 
         autoencoder = AutoEncoder(n_ffwd, n_features, lam=l1_coeff).to(self.device)
         autoencoder.load_state_dict(state_dict)
@@ -114,7 +114,7 @@ class ResourceLoader:
         Y = torch.stack([torch.from_numpy(self.text_data[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix])
         return X.to(device=self.device), Y.to(device=self.device)
 
-    def get_autoencoder_data_batch(self, step, batch_size=8192):
+    def get_autoencoder_data_batch(self, step, batch_size: int):
         """
         Retrieves a batch of autoencoder data based on the step and batch size.
         It loads the next data partition if the batch exceeds the current partition.
@@ -141,14 +141,12 @@ class ResourceLoader:
         return batch.to(self.device)
 
     def load_next_autoencoder_partition(self, partition_id):
-        """
-        Loads the specified partition of the autoencoder data.
-        """
+        """Loads the specified partition of the autoencoder data."""
         file_path = os.path.join(self.autoencoder_data_dir, f'{partition_id}.pt')
-        self.autoencoder_data = torch.load(file_path)
+        self.autoencoder_data = torch.load(file_path, weights_only=False)
         return self.autoencoder_data
 
-    def select_resampling_data(self, size=819200):
+    def select_resampling_data(self, size: int):
         """
         Selects a subset of autoencoder data for resampling, distributed evenly across partitions.
         """

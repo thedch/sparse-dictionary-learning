@@ -2,14 +2,14 @@
 Train a Sparse AutoEncoder model
 
 Run on a macbook on a Shakespeare dataset as
-python train.py --dataset=shakespeare_char --gpt_ckpt_dir=out_sc_1_2_32 --eval_iters=1 --eval_batch_size=16 --batch_size=128 --device=cpu --eval_interval=100 --n_features=1024 --resampling_interval=150 --wandb_log=True
+python train.py --dataset=shakespeare_char --gpt_ckpt_dir=out_sc_1_2_32 --eval_iters=1 --eval_batch_size=16 --batch_size=128 --device=cpu --eval_interval=100 --n_features=1024 --resampling_interval=150
 """
 
 import os
 import torch
 import numpy as np
 import time
-from autoencoder import AutoEncoder
+from autoencoder_architecture import AutoEncoder
 from resource_loader import ResourceLoader
 from utils.plotting_utils import make_density_histogram
 
@@ -18,7 +18,7 @@ from utils.plotting_utils import make_density_histogram
 dataset = 'openwebtext'
 gpt_ckpt_dir = 'out'
 # training
-n_features = 4096
+n_features = 4096  # aka n_latents
 batch_size = 8192  # batch size for autoencoder training
 l1_coeff = 3e-3
 learning_rate = 3e-4
@@ -33,8 +33,6 @@ eval_interval = 1000  # number of training steps after which the autoencoder is 
 save_checkpoint = True  # whether to save model, optimizer, etc or not
 save_interval = 10000  # number of training steps after which a checkpoint will be saved
 out_dir = 'out'  # directory containing trained autoencoder model weights
-# wandb logging
-wandb_log = True
 # system
 device = 'cuda'
 # reproducibility
@@ -57,7 +55,7 @@ resourceloader = ResourceLoader(
 
 gpt = resourceloader.transformer  # TODO: either it should be called transformer or gpt
 autoencoder = AutoEncoder(
-    n_inputs=(4 * resourceloader.transformer.config.n_embd),  # ?? why 4x?
+    n_inputs=(4 * resourceloader.transformer.config.n_embd),
     n_latents=n_features,
     lam=l1_coeff,
     resampling_interval=resampling_interval
@@ -65,12 +63,7 @@ autoencoder = AutoEncoder(
 optimizer = torch.optim.Adam(autoencoder.parameters(), lr=learning_rate)
 
 ## prepare for logging and saving checkpoints
-run_name = f'{time.time():.2f}'
-if wandb_log:
-    raise DeprecationWarning('wandb is deprecated')
-    import wandb
-
-    wandb.init(project=f'sparse-autoencoder-{dataset}', name=run_name, config=config)
+run_name = time.strftime('%Y-%m-%d-%H%M')
 
 if save_checkpoint:
     ckpt_path = os.path.join(out_dir, dataset, run_name)
@@ -181,9 +174,6 @@ for step in range(min(num_steps, 2500)):
                 'feature_density/num_alive_neurons': len(log_feat_acts_density),
             }
         )
-        if wandb_log:
-            log_dict.update({'feature_density/feature_density_histograms': wandb.Image(feat_density_historgram)})
-            wandb.log(log_dict)
 
         autoencoder.train()
         print(f'Exiting evaluation mode at step = {step}')
@@ -199,6 +189,3 @@ for step in range(min(num_steps, 2500)):
         }
         print(f"saving checkpoint to {ckpt_path} at training step = {step}")
         torch.save(checkpoint, os.path.join(ckpt_path, 'ckpt.pt'))
-
-if wandb_log:
-    wandb.finish()
