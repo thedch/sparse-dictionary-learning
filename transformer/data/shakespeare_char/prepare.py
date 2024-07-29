@@ -8,6 +8,7 @@ import os
 import pickle
 import requests
 import numpy as np
+import pandas as pd
 
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
@@ -18,6 +19,22 @@ if not os.path.exists(input_file_path):
 
 with open(input_file_path, 'r') as f:
     data = f.read()
+
+# Add in some Python code training data so the model learns both Shakespare and Python
+df = pd.read_parquet(
+    "hf://datasets/matlok/python-text-copilot-training-instruct-ai-research-2024-02-10/schema/train-0022-qwen-agent-qwen_agent.parquet"
+)
+python_code = '\n###\n'.join(df['code'].dropna().astype(str))
+python_code = python_code.encode('ascii', 'ignore').decode() # there's a few non-ascii characters but I don't want to deal with them
+
+train_split = python_code[:int(len(python_code) * 0.9)]
+val_split = python_code[int(len(python_code) * 0.9):]
+
+# Add the train split to the beginning, and then the val split at the end, so that
+# the code below to create the train/val splits works as expected.
+# In the industry, this is what we call a "insane awful hack".
+data = train_split + data + val_split
+
 print(f"length of dataset in characters: {len(data):,}")
 
 # get all the unique characters that occur in this text
@@ -60,9 +77,9 @@ meta = {
 with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
     pickle.dump(meta, f)
 
-# length of dataset in characters:  1115394
+# length of dataset in characters: 1,217,175
 # all the unique characters:
-#  !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
-# vocab size: 65
-# train has 1003854 tokens
-# val has 111540 tokens
+#  !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~
+# vocab size: 96
+# train has 1,095,457 tokens
+# val has 121,718 tokens
