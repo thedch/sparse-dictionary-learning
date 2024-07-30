@@ -96,7 +96,7 @@ class ResourceLoader:
     def load_autoencoder_model(self):
         """Loads the AutoEncoder model with pre-trained weights"""
         autoencoder_path = os.path.join(self.base_dir, "autoencoder", "out", self.dataset, self.sae_ckpt_dir)
-        autoencoder_ckpt = torch.load(os.path.join(autoencoder_path, 'ckpt.pt'), map_location=self.device)
+        autoencoder_ckpt = torch.load(os.path.join(autoencoder_path, 'ckpt.pt'), map_location=self.device, weights_only=False)
         state_dict = autoencoder_ckpt['autoencoder']
         n_features, n_ffwd = state_dict['encoder.weight'].shape  # H, F
         l1_coeff = autoencoder_ckpt['config']['l1_coeff']

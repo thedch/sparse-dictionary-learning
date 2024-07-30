@@ -20,7 +20,7 @@ python build_website.py --device=cpu --dataset=shakespeare_char --gpt_ckpt_dir=o
 """
 
 import logging
-from tqdm.auto import trange, tqdm
+from tqdm.auto import trange
 from dataclasses import dataclass
 import torch
 from tensordict import TensorDict
@@ -37,8 +37,8 @@ from utils.plotting_utils import make_activations_histogram, make_logits_histogr
 # hyperparameters
 # data and model
 dataset = 'openwebtext'
-gpt_ckpt_dir = 'out'
-sae_ckpt_dir = 0.0  # subdirectory containing the specific model to consider
+gpt_ckpt_dir = 'MUST_BE_PROVIDED'
+sae_ckpt_dir = 'MUST_BE_PROVIDED'  # subdirectory containing the specific model to consider
 # feature page hyperparameter
 num_contexts = 10000
 num_sampled_tokens = 10  # number of tokens in each context on which feature activations will be computed
@@ -50,7 +50,7 @@ samples_per_interval = 5  # number of examples to sample from each interval of a
 gpt_batch_size = 156
 num_phases = 52  # due to memory constraints, it's useful to process features in phases.
 # system
-device = 'cuda'  # change it to cpu
+device = 'mps'
 # reproducibility
 seed = 1442
 
@@ -58,21 +58,21 @@ seed = 1442
 @dataclass
 class FeatureBrowserConfig:
     # dataset and model
-    dataset: str = "openwebtext"
-    gpt_ckpt_dir: str = "out"
-    sae_ckpt_dir: str = "out"
+    dataset: str
+    gpt_ckpt_dir: str
+    sae_ckpt_dir: str
     # feature browser hyperparameters
-    num_contexts: int = int(1e6)
-    num_sampled_tokens: int = 10
-    window_radius: int = 4
-    num_top_activations: int = 10
-    num_intervals: int = 12
-    samples_per_interval: int = 5
+    num_contexts: int
+    num_sampled_tokens: int
+    window_radius: int
+    num_top_activations: int
+    num_intervals: int
+    samples_per_interval: int
     # processing hyperparameters
-    seed: int = 0
-    device: str = "cpu"
-    gpt_batch_size: int = 156
-    num_phases: int = 52
+    seed: int
+    device: str
+    gpt_batch_size: int
+    num_phases: int
 
 
 class FeatureBrowser(ResourceLoader):
@@ -86,7 +86,6 @@ class FeatureBrowser(ResourceLoader):
         )
 
         # retrieve feature browser hyperparameters from config
-        # self.num_contexts = config.num_contexts
         self.num_sampled_tokens = config.num_sampled_tokens
         self.window_radius = config.window_radius
         self.num_top_activations = num_top_activations
@@ -136,11 +135,15 @@ class FeatureBrowser(ResourceLoader):
 
         for phase in trange(self.num_phases, desc='processing features in phases'):
             feature_start_idx = phase * self.num_features_per_phase
-            feature_end_idx = min((phase + 1) * self.num_features_per_phase, self.n_features)  # 4096 features in the latent space of the autoencoder
-            # logging.info(f'working on features # {feature_start_idx} - {feature_end_idx} in phase {phase + 1}/{self.num_phases}')
+            feature_end_idx = min((phase + 1) * self.num_features_per_phase, self.n_features)
+
+            if feature_start_idx >= feature_end_idx:
+                # TODO: Adjust the feature selection logic so this never happens, just use more_itertools
+                continue
+
             context_window_data = self.compute_context_window_data(feature_start_idx, feature_end_idx)
             top_acts_data = self.compute_top_activations(context_window_data)
-            for h in trange(0, feature_end_idx - feature_start_idx, desc='making histograms'):
+            for h in trange(0, feature_end_idx - feature_start_idx, desc='making histograms', disable=True):
                 # make and save histogram of logits for this feature
                 feature_id = phase * self.num_features_per_phase + h
                 make_logits_histogram(logits=self.attributed_logits[feature_id, :], feature_id=feature_id, dirpath=self.html_out)
@@ -156,9 +159,7 @@ class FeatureBrowser(ResourceLoader):
         This should probably also include feature ablations."""
         context_window_data = self._initialize_context_window_data(feature_start_idx, feature_end_idx)
 
-        for iter in trange(self.num_batches, desc='computing feature activations per batch'):
-            # if iter % 20 == 0:
-                # logging.info(f"computing feature activations for batches {iter+1}-{min(iter+20, self.num_batches)}/{self.num_batches}")
+        for iter in trange(self.num_batches, desc='computing feature activations per batch', disable=True):
             batch_start_idx = iter * self.gpt_batch_size
             batch_end_idx = (iter + 1) * self.gpt_batch_size
             x, feature_activations, logits_difference_storage = self._compute_batch_feature_activations(
@@ -329,10 +330,12 @@ class FeatureBrowser(ResourceLoader):
 
         result_tensors = []
         for tensor in args:
+            assert tensor.numel() > 0, "Tensor has 0 elements"
+
             if tensor.ndim == 3:
                 L = tensor.shape[2]
                 sliced_tensor = tensor[batch_idx, window_idx, :]  # (B, S, W, L)
-                sliced_tensor = sliced_tensor.view(-1, self.window_length, L)  # (B *S , W, L)
+                sliced_tensor = sliced_tensor.view(-1, self.window_length, L)  # (B*S , W, L)
             elif tensor.ndim == 2:
                 sliced_tensor = tensor[batch_idx, window_idx]  # (B, S, W)
                 sliced_tensor = sliced_tensor.view(-1, self.window_length)  # (B*S, W)
@@ -375,9 +378,9 @@ class FeatureBrowser(ResourceLoader):
         # TODO: do I need to center the median at 0 before computing differences?
         # Otherwise, the probability of sampling the token can probably not be compared through the logit weight alone.
         logits_difference_storage = torch.zeros(B, T, H, device=self.device)  # (B, T, H)
-        for h in trange(H, desc='computing logits with replacement tensor'):
+        for h in trange(H, desc='computing logits with replacement tensor', disable=True):
             # on CPU, each forward pass takes ~12 seconds
-            # on MPS, each forward pass takes ~200 ms (!!!)
+            # on MPS, each forward pass takes ~200 ms (!!)
             feat_ablation_logits, _ = self.transformer(x, y, mode="replace", replacement_tensor=feature_ablations[:, :, :, h])  # (B, T, V)
 
             logits_difference = original_logits - feat_ablation_logits  # (B, T, V)

@@ -18,6 +18,7 @@ from utils.plotting_utils import make_density_histogram
 dataset = 'openwebtext'
 gpt_ckpt_dir = 'out'
 # training
+# TODO: Rename n_features to be latent_multiple, and base it off the gpt model
 n_features = 4096  # aka n_latents
 batch_size = 8192  # batch size for autoencoder training
 l1_coeff = 3e-3
@@ -135,7 +136,7 @@ for step in range(min(num_steps, 2500)):
             _, nll_loss = gpt(x, y)
             mlp_acts = gpt.mlp_activation_hooks[0]
             gpt.clear_mlp_activation_hooks()  # free up memory
-            _, ablated_loss = gpt(x, y, mode="replace")
+            # _, ablated_loss = gpt(x, y, mode="replace")
 
             with torch.no_grad():
                 autoencoder_output = autoencoder(mlp_acts)
@@ -151,7 +152,7 @@ for step in range(min(num_steps, 2500)):
             log_dict['losses/autoencoder_loss'] += autoencoder_output['loss'].item()
             log_dict['losses/reconstruction_loss'] += autoencoder_output['mse_loss'].item()
             log_dict['losses/l1_norm'] += autoencoder_output['l1_loss'].item()
-            log_dict['losses/nll_score'] += (nll_loss - reconstructed_nll).item() / (nll_loss - ablated_loss).item()
+            # log_dict['losses/nll_score'] += (nll_loss - reconstructed_nll).item() / (nll_loss - ablated_loss).item()
 
         # compute feature densities and plot feature density histogram
         log_feat_acts_density = np.log10(
