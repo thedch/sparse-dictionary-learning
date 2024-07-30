@@ -20,17 +20,16 @@ python build_website.py --device=cpu --dataset=shakespeare_char --gpt_ckpt_dir=o
 """
 
 import logging
+from pathlib import Path
 from tqdm.auto import trange
 from dataclasses import dataclass
 import torch
 from tensordict import TensorDict
 import os
-import sys
 from math import ceil
-from main_page import create_main_html_page
-from subpages import write_alive_feature_page, write_dead_feature_page, write_ultralow_density_feature_page
+from feature_browser.main_page import create_main_html_page
+from feature_browser.subpages import write_alive_feature_page, write_dead_feature_page, write_ultralow_density_feature_page
 
-sys.path.insert(1, '../')
 from resource_loader import ResourceLoader
 from utils.plotting_utils import make_activations_histogram, make_logits_histogram
 
@@ -399,7 +398,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     # -----------------------------------------------------------------------------
     config_keys = [k for k, v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-    configurator = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'configurator.py')
+    configurator = Path(__file__).parent / 'configurator.py'
     exec(open(configurator).read())  # overrides from command line or config file
     config = {k: globals()[k] for k in config_keys}  # will be useful for logging
     # -----------------------------------------------------------------------------

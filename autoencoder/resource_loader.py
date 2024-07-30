@@ -8,8 +8,7 @@ import tiktoken
 # Extend the Python path to include the transformer subdirectory for GPT class import
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(base_dir, 'transformer'))
-from model import GPTConfig
-from hooked_model import HookedGPT
+from model import GPTConfig, HookedGPT
 
 
 class ResourceLoader:
@@ -163,17 +162,8 @@ class ResourceLoader:
         return resampling_data
 
     def load_tokenizer(self):
-        load_meta = False
         meta_path = os.path.join(self.base_dir, 'transformer', 'data', self.dataset, 'meta.pkl')
-        load_meta = os.path.exists(meta_path)
-        if load_meta:
-            print(f"Loading meta from {meta_path}...")
-            with open(meta_path, 'rb') as f:
-                meta = pickle.load(f)
-            # TODO want to make this more general to arbitrary encoder/decoder schemes
-            stoi, itos = meta['stoi'], meta['itos']
-            encode = lambda s: [stoi[c] for c in s]
-            decode = lambda l: ''.join([itos[i] for i in l])
-        else:
-            raise DeprecationWarning('must load from dataset dir')
-        return encode, decode
+        with open(meta_path, 'rb') as f:
+            meta = pickle.load(f)
+
+        return meta['encode'], meta['decode']
