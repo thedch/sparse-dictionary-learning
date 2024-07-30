@@ -24,14 +24,8 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
-
-
-import torch._dynamo
-torch._dynamo.config.suppress_errors = True
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -42,11 +36,7 @@ log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
-# wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
+init_from = 'scratch'
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -146,7 +136,6 @@ if init_from == 'scratch':
     # determine the vocab size we'll use for from-scratch training
     if meta_vocab_size is None:
         raise DeprecationWarning('please set vocab_size')
-        print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
@@ -294,4 +283,3 @@ while True:
 
 if ddp:
     raise DeprecationWarning('DDP is deprecated, please use CPU')
-    destroy_process_group()
