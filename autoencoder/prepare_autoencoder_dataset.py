@@ -1,5 +1,5 @@
 """"
-Prepares training dataset for our autoencoder. 
+Prepares training dataset for our autoencoder.
 Run on Macbook as
 python -u prepare.py --num_contexts=5000 --num_sampled_tokens=16 --dataset=shakespeare_char --gpt_ckpt_dir=out_sc_1_2_32
 """
@@ -16,9 +16,9 @@ dataset = 'openwebtext'
 gpt_ckpt_dir = 'out'  # Model checkpoint directory
 # autoencoder data size
 num_contexts = int(2e6)  # Number of context windows
-num_sampled_tokens = 200  # Tokens per context window
+num_sampled_tokens = 200  # Tokens per context window -- TODO: why isn't this just the same as block size?
 # system
-device = 'cpu'
+device = 'mps'
 num_partitions = 20  # Number of output files
 # reproducibility
 seed = 0
@@ -46,24 +46,24 @@ shuffled_indices = torch.randperm(num_contexts * num_sampled_tokens)
 
 def compute_activations():
     start_time = time.time()
-    gpt_batch_size = 500
+    gpt_batch_size = 500 # ?
     n_batches = num_contexts // gpt_batch_size
 
     for batch in range(n_batches):
         # Load batch and compute activations
-        x, _ = resource_loader.get_text_batch(gpt_batch_size)
+        x, _ = resource_loader.get_text_batch(gpt_batch_size) # (gpt_batch_size, block_size)
         _, _ = gpt(x)  # Forward pass
-        activations = gpt.mlp_activation_hooks[0]  # Retrieve activations
+        activations = gpt.mlp_activation_hooks[0]  # (gpt_batch_size, block_size, 4 * n_embd) -- 4x because the inner layer is 4x the size of the input
 
         # Clean up to save memory
         gpt.clear_mlp_activation_hooks()
 
         # Process and store activations
-        token_locs = torch.stack([torch.randperm(block_size)[:num_sampled_tokens] for _ in range(gpt_batch_size)])
-        data = torch.gather(activations, 1, token_locs.unsqueeze(2).expand(-1, -1, activations.size(2))).view(-1, n_ffwd)
-        data_storage[shuffled_indices[batch * gpt_batch_size * num_sampled_tokens : (batch + 1) * gpt_batch_size * num_sampled_tokens]] = (
-            data
-        )
+        token_locs = torch.stack([torch.randperm(block_size)[:num_sampled_tokens] for _ in range(gpt_batch_size)])  # (gpt_batch_size, num_sampled_tokens)
+        data = torch.gather(activations, 1, token_locs.unsqueeze(2).expand(-1, -1, activations.size(2))).view(-1, n_ffwd)  # (gpt_batch_size * num_sampled_tokens, n_ffwd)
+        data_storage[
+            shuffled_indices[batch * gpt_batch_size * num_sampled_tokens : (batch + 1) * gpt_batch_size * num_sampled_tokens]
+        ] = data
 
         print(
             f"Batch {batch}/{n_batches} processed in {(time.time() - start_time) / (batch + 1):.2f} seconds; "

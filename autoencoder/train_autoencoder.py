@@ -5,6 +5,7 @@ Run on a macbook on a Shakespeare dataset as
 python train.py --dataset=shakespeare_char --gpt_ckpt_dir=out_sc_1_2_32 --eval_iters=1 --eval_batch_size=16 --batch_size=128 --device=cpu --eval_interval=100 --n_features=1024 --resampling_interval=150
 """
 
+from tqdm import trange
 import os
 import torch
 import numpy as np
@@ -74,8 +75,7 @@ if save_checkpoint:
 start_time = time.time()
 num_steps = resourceloader.autoencoder_data_info["total_examples"] // batch_size
 
-for step in range(min(num_steps, 2500)):
-
+for step in trange(num_steps, desc="Training Autoencoder"):
     batch = resourceloader.get_autoencoder_data_batch(step, batch_size=batch_size)
     optimizer.zero_grad(set_to_none=True)
     autoencoder_output = autoencoder(batch)  # f has shape (batch_size, n_features)
@@ -89,7 +89,7 @@ for step in range(min(num_steps, 2500)):
     if step % 1000 == 0:
         autoencoder.normalize_decoder_columns()
 
-    ## ------------ perform neuron resampling ----------- ######
+    ###### ------------ perform neuron resampling ----------- ######
     # check if we should start investigating dead/alive neurons at this step
     # This is done at an odd multiple of resampling_interval // 2 in Anthropic's paper.
     if autoencoder.is_dead_neuron_investigation_step(step, resampling_interval, num_resamples):
@@ -110,7 +110,7 @@ for step in range(min(num_steps, 2500)):
                 data=resourceloader.select_resampling_data(size=resampling_data_size), optimizer=optimizer, batch_size=batch_size
             )
 
-    ### ------------ log info ----------- ######
+    ###### ------------ log info ----------- ######
     if (step % eval_interval == 0) or step == num_steps - 1:
         print(f'Entering evaluation mode at step = {step}')
         autoencoder.eval()
@@ -128,9 +128,7 @@ for step in range(min(num_steps, 2500)):
         feat_acts_count = torch.zeros(n_features, dtype=torch.float32)
 
         # get batches of text data and evaluate the autoencoder on MLP activations
-        for iter in range(eval_iters):
-            if iter % 20 == 0:
-                print(f'Performing evaluation at iterations # ({iter} - {min(iter+19, eval_iters)})/{eval_iters}')
+        for iter in trange(eval_iters, desc="Evaluating Autoencoder"):
             x, y = resourceloader.get_text_batch(num_contexts=eval_batch_size)
 
             _, nll_loss = gpt(x, y)
@@ -175,6 +173,15 @@ for step in range(min(num_steps, 2500)):
                 'feature_density/num_alive_neurons': len(log_feat_acts_density),
             }
         )
+        # Print log_dict in a readable format
+        print("Evaluation Results:")
+        print("-" * 40)
+        for key, value in log_dict.items():
+            if isinstance(value, float):
+                print(f"{key:<35} {value:.6f}")
+            else:
+                print(f"{key:<35} {value}")
+        print("-" * 40)
 
         autoencoder.train()
         print(f'Exiting evaluation mode at step = {step}')
